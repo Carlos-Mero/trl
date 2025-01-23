@@ -277,7 +277,7 @@ class GRPOTrainer(Trainer):
                 rewards = self.reward_model(**reward_inputs).logits[:, 0]  # Shape (B*G,)
         else:
             texts = [p + c for p, c in zip(prompts, completions)]
-            rewards = self.reward_model(texts)
+            rewards = self.reward_model(texts).to(device)
 
         # Compute grouped-wise rewards
         mean_grouped_rewards = rewards.view(-1, self.num_generations).mean(dim=1)
