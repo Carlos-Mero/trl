@@ -213,8 +213,22 @@ class GRPOTrainer(Trainer):
             prompt_inputs["attention_mask"] = prompt_inputs["attention_mask"][:, -self.max_prompt_length :]
 
         # Generate completions
-        with unwrap_model_for_generation(model, self.accelerator) as unwrapped_model:
-            prompt_completion_ids = unwrapped_model.generate(**prompt_inputs, generation_config=self.generation_config)
+        if "completions" in inputs[0].keys():
+            # If the input dataset element already contains the completions, we do not need to generate it again
+            # The "completions" should be a list containing a group of different samples of completions from a single prompt.
+            self.num_generations = len(inputs[0]['completions'])
+            prompt_completion_text = [result['prompt'] + result['completion']
+                for example in inputs
+                for result in [maybe_apply_chat_template(
+                    {"prompt": [{'role': 'user', 'content': example['prompt']}],
+                     "completion": [{'role': 'assistant', 'content': completion}]},
+                    self.processing_class) for completion in example['completions']]]
+            prompt_completion_ids = self.processing_class(
+                prompt_completion_text, return_tensors="pt", padding=True, padding_side="left", add_special_tokens=False
+            )['input_ids']
+        else:
+            with unwrap_model_for_generation(model, self.accelerator) as unwrapped_model:
+                prompt_completion_ids = unwrapped_model.generate(**prompt_inputs, generation_config=self.generation_config)
         prompt_length = prompt_inputs["input_ids"].size(1)
         completion_ids = prompt_completion_ids[:, prompt_length:]
 
@@ -259,7 +273,12 @@ class GRPOTrainer(Trainer):
 
         # Compute the rewards
         prompts = [prompt for prompt in prompts for _ in range(self.num_generations)]
-        if isinstance(self.reward_model, (PreTrainedModel, nn.Module)):
+        if 'rewards' in inputs[0].keys():
+            # If there is predifined rewards, we should directly use them
+            # The rewards should be a list of the same length as completions
+            rewards = [reward for example in inputs for reward in example['rewards']]
+            rewards = torch.tensor(rewards).to(device)
+        elif isinstance(self.reward_model, (PreTrainedModel, nn.Module)):
             if is_conversational(inputs[0]):
                 completions = [[{"role": "assistant", "content": completion}] for completion in completions]
                 messages = [{"messages": p + c} for p, c in zip(prompts, completions)]
