@@ -224,7 +224,7 @@ class GRPOTrainer(Trainer):
                      "completion": [{'role': 'assistant', 'content': completion}]},
                     self.processing_class) for completion in example['completions']]]
             prompt_completion_ids = self.processing_class(
-                prompt_completion_text, return_tensors="pt", padding=True, padding_side="left", add_special_tokens=False
+                prompt_completion_text, return_tensors="pt", padding=True, padding_side="right", add_special_tokens=False
             )['input_ids']
         else:
             with unwrap_model_for_generation(model, self.accelerator) as unwrapped_model:
