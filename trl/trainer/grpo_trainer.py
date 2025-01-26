@@ -330,6 +330,7 @@ class GRPOTrainer(Trainer):
             prompt_completion_ids = self.processing_class(
                 prompt_completion_text, return_tensors="pt", padding=True, padding_side="right", add_special_tokens=False
             )['input_ids']
+            prompt_completion_ids.to(self.accelerator.device)
         else:
             with unwrap_model_for_generation(model, self.accelerator) as unwrapped_model:
                 prompt_completion_ids = unwrapped_model.generate(**prompt_inputs, generation_config=self.generation_config)
